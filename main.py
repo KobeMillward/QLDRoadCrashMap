@@ -1,13 +1,27 @@
-import csv
 import folium
 import io
 import sys
+import json
 from PyQt5.QtWidgets import QApplication, QWidget, QHBoxLayout, QVBoxLayout, QPushButton
 from PyQt5 import QtWebEngineWidgets
-
+from urllib.request import urlopen
+from os.path import isfile
 
 def get_data():
-    pass
+    LIMIT = 30000 # API has a 32000 request size limit
+    URL = "https://www.data.qld.gov.au/api/3/action/datastore_search?resource_id=e88943c0-5968-4972-a15f-38e120d72ec0&limit="+str(LIMIT)
+    try:
+        data = []
+        for req_i in range(0, 13):
+            fileobj = urlopen(URL + "&offset=" + str(req_i*LIMIT))
+            res_json = json.loads(fileobj.read())
+            res_result = res_json["result"]
+            data = data + res_result["records"]
+            print("Request: " + str(req_i+1) + "/13")
+        with open("crash_data.json", "w") as datafile:
+            json.dump(data, datafile, indent=2)
+    except:
+        exit(-1)
 
 
 def create_gui():
@@ -55,7 +69,8 @@ def create_gui():
 
 
 if __name__ == "__main__":
+    if not isfile("./crash_data.json"):
+        get_data()
 
-    get_data()
-    create_gui()
+    #create_gui()
 
