@@ -1,28 +1,55 @@
+import urllib.request
+
 import folium
 import io
 import sys
 import json
-from PyQt5.QtWidgets import QApplication, QWidget, QHBoxLayout, QVBoxLayout, QPushButton
+from PyQt5.QtWidgets import QApplication, QWidget, QMainWindow, QHBoxLayout, QVBoxLayout, QPushButton, QLabel, QProgressBar
 from PyQt5 import QtWebEngineWidgets
-from urllib.request import urlopen
-from os.path import isfile
+import os
+from math import floor
 
-def get_data():
-    LIMIT = 30000 # API has a 32000 request size limit
-    URL = "https://www.data.qld.gov.au/api/3/action/datastore_search?resource_id=e88943c0-5968-4972-a15f-38e120d72ec0&limit="+str(LIMIT)
-    try:
-        data = []
-        for req_i in range(0, 13):
-            fileobj = urlopen(URL + "&offset=" + str(req_i*LIMIT))
-            res_json = json.loads(fileobj.read())
-            res_result = res_json["result"]
-            data = data + res_result["records"]
-            print("Request: " + str(req_i+1) + "/13")
-        with open("crash_data.json", "w") as datafile:
-            json.dump(data, datafile, indent=2)
-    except:
-        exit(-1)
+class DataRequestWindow(QWidget):
 
+    def __init__(self):
+        super().__init__()
+        layout = QVBoxLayout()
+        self.setLayout(layout)
+        layout.addWidget(QLabel("Data must be downloaded (~179 MB)"))
+        buttonOptionsFrame = QWidget()
+        buttonOptionsFrame.setLayout(QHBoxLayout())
+        cancel_button = QPushButton("Cancel")
+        cancel_button.clicked.connect(self.cancel)
+        download_button = QPushButton("Download")
+        download_button.clicked.connect(self.download)
+        buttonOptionsFrame.layout().addWidget(cancel_button)
+        buttonOptionsFrame.layout().addWidget(download_button)
+        layout.addWidget(buttonOptionsFrame)
+        self.progress_bar = QProgressBar()
+        layout.addWidget(self.progress_bar)
+
+    def cancel(self):
+        exit(0)
+
+    def handleProgress(self, blocknum, blocksize, totalsize):
+        read_data = blocknum * blocksize
+
+        if totalsize > 0:
+            download_percentage = floor(read_data * 100 / totalsize)
+            self.progress_bar.setValue(download_percentage)
+            QApplication.processEvents()
+
+    def download(self):
+        URL = "https://www.data.qld.gov.au/dataset/f3e0ca94-2d7b-44ee-abef-d6b06e9b0729/resource/e88943c0-5968-4972-a" \
+              "15f-38e120d72ec0/download/crash_data_queensland_1_crash_locations.csv"
+        filename = "./crash_data.csv"
+        try:
+            urllib.request.urlretrieve(URL, filename, self.handleProgress)
+        except:
+            # Delete file safely
+            if os.path.isfile("./crash_data.csv"):
+                os.remove("./crash_data.csv")
+            exit(-1)
 
 def create_gui():
     m = folium.Map(location=[-27.470457, 153.025974])
@@ -31,7 +58,7 @@ def create_gui():
     m.save(data_b, close_file=False)
 
     # Create GUI
-    app = QApplication(sys.argv)
+    app = QApplication([])
     window = QWidget()
     # Right Frame (Map)
     right_frame = QWidget()
@@ -69,8 +96,12 @@ def create_gui():
 
 
 if __name__ == "__main__":
-    if not isfile("./crash_data.json"):
-        get_data()
+    app = QApplication(sys.argv)
+    if not os.path.isfile("./crash_data.csv"):
+        # Create data download request gui
+        w = DataRequestWindow()
+        w.show()
+        app.exec_()
 
     #create_gui()
 
