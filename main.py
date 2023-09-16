@@ -3,11 +3,54 @@ import urllib.request
 import folium
 import io
 import sys
-import json
+from csv import DictReader
 from PyQt5.QtWidgets import QApplication, QWidget, QMainWindow, QHBoxLayout, QVBoxLayout, QPushButton, QLabel, QProgressBar
 from PyQt5 import QtWebEngineWidgets
 import os
 from math import floor
+
+class VisualisationWindow(QWidget):
+
+    def __init__(self):
+        super().__init__()
+
+        try:
+            with open("crash_data.csv", "r") as file:
+                dict_reader = DictReader(file)
+                self.data = list(dict_reader)
+        except:
+            print("Error loading data")
+            exit(-1)
+
+
+
+        self.main_layout = QHBoxLayout()
+        self.setLayout(self.main_layout)
+        self.leftPanel = QWidget()
+        self.leftPanelLayout = QVBoxLayout()
+        self.leftPanel.setLayout(self.leftPanelLayout)
+        self.main_layout.addWidget(self.leftPanel)
+
+        self.leftPanelLayout.addWidget(QLabel("Year"))
+        self.leftPanelLayout.addWidget(QLabel("Month"))
+        self.leftPanelLayout.addWidget(QLabel("Severity"))
+        self.leftPanelLayout.addWidget(QLabel("Road Conditions"))
+
+        m = folium.Map(location=[-27.470266, 153.025974])
+        for point in range(10000, 11000):
+            folium.CircleMarker(
+                location=[self.data[point]["Crash_Latitude"], self.data[point]["Crash_Longitude"]],
+                radius=3,
+                fill=True
+            ).add_to(m)
+        map_bytes = io.BytesIO()
+        m.save(map_bytes, close_file=False)
+
+
+        self.map_panel = QtWebEngineWidgets.QWebEngineView()
+        self.main_layout.addWidget(self.map_panel)
+        self.map_panel.setHtml(map_bytes.getvalue().decode())
+
 
 class DataRequestWindow(QWidget):
 
@@ -102,6 +145,9 @@ if __name__ == "__main__":
         w = DataRequestWindow()
         w.show()
         app.exec_()
-
+    else:
+        w = VisualisationWindow()
+        w.show()
+        app.exec_()
     #create_gui()
 
