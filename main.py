@@ -19,6 +19,11 @@ class VisualisationWindow(QWidget):
         with open("crash_data.csv", "r") as csv_file:
             self.data = pd.read_csv("./crash_data.csv")
 
+        self.years = self.data['Crash_Year'].unique()
+        self.selectedYears = self.years
+        self.severity = self.data['Crash_Severity'].unique()
+        self.selectedSeverity = self.severity
+
         self.main_layout = QHBoxLayout()
         self.setLayout(self.main_layout)
         self.leftPanel = QWidget()
@@ -31,15 +36,34 @@ class VisualisationWindow(QWidget):
         self.leftPanelLayout.addWidget(QLabel("Severity"))
         self.leftPanelLayout.addWidget(QLabel("Road Conditions"))
 
-        m = folium.Map(location=[-27.470266, 153.025974])
-        m.add_child(FastMarkerCluster(self.data[['Crash_Latitude', 'Crash_Longitude']].values.tolist()))
-        m.save("map.html")
-
         self.map_panel = QtWebEngineWidgets.QWebEngineView()
         self.main_layout.addWidget(self.map_panel)
+        self.updateMap()
+
+    def updateMap(self):
+
+        callback = ("function(row) {"
+                    "   var marker = L.marker(new L.LatLng(row[0], row[1]), {color: 'red'});"
+                    "   var popup = L.popup({maxWidth: '300'});"
+                    "   var popup_text = $(`<div style='width: 100%; height:100%;'>Latitude: ${row[0]}<br/>"
+                    "Longitude: ${row[1]}<br/>Severity: ${row[2]}</div>`)[0];"
+                    "   popup.setContent(popup_text);"
+                    "   marker.bindPopup(popup);"
+                    "   return marker;"
+                    "}")
+
+        popups = ["Longitude: {}<br>".format(self.data['Crash_Longitude'])]
+
+        filtered_data = self.data[self.data['Crash_Year'].isin(self.selectedYears)]
+        filtered_data = filtered_data[filtered_data['Crash_Severity'].isin(["Fatal"])]
+
+        m = folium.Map(location=[-27.470266, 153.025974], zoom_start=9)
+        m.add_child(FastMarkerCluster(filtered_data[['Crash_Latitude', 'Crash_Longitude', 'Crash_Severity']].values.tolist(),
+                                      popups=popups,
+                                      callback=callback))
+        m.save("map.html")
         map_url = QUrl.fromLocalFile("/map.html")
         self.map_panel.load(map_url)
-
 
 class DataRequestWindow(QWidget):
 
