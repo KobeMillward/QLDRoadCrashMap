@@ -21,7 +21,7 @@ class VisualisationWindow(QWidget):
             self.data = pd.read_csv("./crash_data.csv")
 
         self.years = self.data['Crash_Year'].unique()
-        self.selectedYears = self.years
+        self.selectedYears = self.years.tolist()
         self.severity = self.data['Crash_Severity'].unique()
         self.selectedSeverity = self.severity
 
@@ -37,9 +37,11 @@ class VisualisationWindow(QWidget):
         for year in self.years:
             year_filter_checkbox = QCheckBox(str(year))
             year_filter_checkbox.toggle()
+            year_filter_checkbox.stateChanged.connect(self.updateYearFilterFactory(year))
             year_filter_menu_layout.addWidget(year_filter_checkbox)
         year_filter_menu.setContentLayout(year_filter_menu_layout)
         self.leftPanelLayout.addWidget(year_filter_menu)
+
         self.leftPanelLayout.addWidget(QLabel("Month"))
         self.leftPanelLayout.addWidget(QLabel("Severity"))
         self.leftPanelLayout.addWidget(QLabel("Road Conditions"))
@@ -52,6 +54,14 @@ class VisualisationWindow(QWidget):
         self.map_panel = QtWebEngineWidgets.QWebEngineView()
         self.main_layout.addWidget(self.map_panel)
         self.updateMap()
+
+    def updateYearFilterFactory(self, year):
+        def updateYearFilter():
+            if year in self.selectedYears:
+                self.selectedYears.remove(year)
+            else:
+                self.selectedYears.append(year)
+        return updateYearFilter
 
     def updateMap(self):
 
