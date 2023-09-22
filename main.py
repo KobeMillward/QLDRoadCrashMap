@@ -5,10 +5,11 @@ import sys
 import os
 import pandas as pd
 from PyQt5.QtCore import QUrl
-from PyQt5.QtWidgets import QApplication, QWidget, QHBoxLayout, QVBoxLayout, QPushButton, QLabel, QProgressBar
+from PyQt5.QtWidgets import QApplication, QWidget, QHBoxLayout, QVBoxLayout, QPushButton, QLabel, QProgressBar, QCheckBox
 from PyQt5 import QtWebEngineWidgets, QtWebEngineCore
 from math import floor
 from folium.plugins import FastMarkerCluster
+from CollapsibleBox import CollapsableBox
 
 
 class VisualisationWindow(QWidget):
@@ -31,10 +32,22 @@ class VisualisationWindow(QWidget):
         self.leftPanel.setLayout(self.leftPanelLayout)
         self.main_layout.addWidget(self.leftPanel)
 
-        self.leftPanelLayout.addWidget(QLabel("Year"))
+        year_filter_menu = CollapsableBox.CollapsibleBox("Year")
+        year_filter_menu_layout = QVBoxLayout()
+        for year in self.years:
+            year_filter_checkbox = QCheckBox(str(year))
+            year_filter_checkbox.toggle()
+            year_filter_menu_layout.addWidget(year_filter_checkbox)
+        year_filter_menu.setContentLayout(year_filter_menu_layout)
+        self.leftPanelLayout.addWidget(year_filter_menu)
         self.leftPanelLayout.addWidget(QLabel("Month"))
         self.leftPanelLayout.addWidget(QLabel("Severity"))
         self.leftPanelLayout.addWidget(QLabel("Road Conditions"))
+
+        filterButton = QPushButton("Filter")
+        filterButton.clicked.connect(self.updateMap)
+
+        self.leftPanelLayout.addWidget(filterButton)
 
         self.map_panel = QtWebEngineWidgets.QWebEngineView()
         self.main_layout.addWidget(self.map_panel)
@@ -55,7 +68,7 @@ class VisualisationWindow(QWidget):
         popups = ["Longitude: {}<br>".format(self.data['Crash_Longitude'])]
 
         filtered_data = self.data[self.data['Crash_Year'].isin(self.selectedYears)]
-        filtered_data = filtered_data[filtered_data['Crash_Severity'].isin(["Fatal"])]
+        filtered_data = filtered_data[filtered_data['Crash_Severity'].isin(self.selectedSeverity)]
 
         m = folium.Map(location=[-27.470266, 153.025974], zoom_start=9)
         m.add_child(FastMarkerCluster(filtered_data[['Crash_Latitude', 'Crash_Longitude', 'Crash_Severity']].values.tolist(),
@@ -162,5 +175,3 @@ if __name__ == "__main__":
         w = VisualisationWindow()
         w.show()
         app.exec_()
-    #create_gui()
-
