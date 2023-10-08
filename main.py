@@ -124,7 +124,15 @@ class VisualisationWindow(QWidget):
     def updateMap(self):
 
         callback = ("function(row) {"
-                    "   var marker = L.marker(new L.LatLng(row[0], row[1]), {color: 'red'});"
+                    "   var markerSize = 3 + row[3]*3;"
+                    "   var markerColour = '#99ff00';"
+                    "   if (row[2] == 'Fatal') {"
+                    "       markerColour = '#ff0000';"
+                    "   } else if (row[2] == 'Hospitalisation') {"
+                    "       markerColour = '#ffe600';"
+                    "   }"
+                    "   var marker = L.circleMarker(new L.LatLng(row[0], row[1]), "
+                    "{radius: markerSize, color: markerColour, fill: true, fillOpacity: 0.8});"
                     "   var popup = L.popup({maxWidth: '300'});"
                     "   var popup_text = $(`<div style='width: 100%; height:100%;'>Latitude: ${row[0]}<br/>"
                     "Longitude: ${row[1]}<br/>Severity: ${row[2]}</div>`)[0];"
@@ -136,11 +144,14 @@ class VisualisationWindow(QWidget):
         popups = ["Longitude: {}<br>".format(self.data['Crash_Longitude'])]
 
         filtered_data = self.data[self.data['Crash_Year'].isin(self.selectedYears)]
+        filtered_data = filtered_data[filtered_data['Crash_Month'].isin(self.selectedMonths)]
         filtered_data = filtered_data[filtered_data['Crash_Severity'].isin(self.selectedSeverity)]
+        filtered_data = filtered_data[filtered_data['Crash_Road_Surface_Condition'].isin(self.selectedRoadConditions)]
 
         m = folium.Map(location=[-27.470266, 153.025974], zoom_start=10)
-        m.add_child(FastMarkerCluster(filtered_data[['Crash_Latitude', 'Crash_Longitude', 'Crash_Severity']].values.tolist(),
-                                      popups=popups,
+        m.add_child(FastMarkerCluster(filtered_data[['Crash_Latitude', 'Crash_Longitude', 'Crash_Severity',
+                                                     'Count_Casualty_Total']].values.tolist(),
+                                      #popups=popups,
                                       callback=callback,
                                       options={
                                           'disableClusteringAtZoom': 17,
