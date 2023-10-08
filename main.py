@@ -4,8 +4,9 @@ import io
 import sys
 import os
 import pandas as pd
-from PyQt5.QtCore import QUrl
-from PyQt5.QtWidgets import QApplication, QWidget, QHBoxLayout, QVBoxLayout, QPushButton, QLabel, QProgressBar, QCheckBox
+from PyQt5.QtCore import QUrl, Qt
+from PyQt5.QtWidgets import QApplication, QWidget, QHBoxLayout, QVBoxLayout, QPushButton, QLabel, QProgressBar, \
+    QCheckBox, QScrollArea
 from PyQt5 import QtWebEngineWidgets
 from math import floor
 from folium.plugins import FastMarkerCluster
@@ -19,6 +20,8 @@ class VisualisationWindow(QWidget):
 
         with open("crash_data.csv", "r") as csv_file:
             self.data = pd.read_csv("./crash_data.csv")
+        # Clean data
+        self.data.drop(self.data[self.data['Crash_Latitude'] == -0.0000095141966955].index, inplace=True)
 
         self.years = self.data['Crash_Year'].unique()
         self.selectedYears = self.years.tolist()
@@ -34,7 +37,6 @@ class VisualisationWindow(QWidget):
         self.leftPanel = QWidget()
         self.leftPanelLayout = QVBoxLayout()
         self.leftPanel.setLayout(self.leftPanelLayout)
-        self.main_layout.addWidget(self.leftPanel)
 
         # Year Filter Menu
         year_filter_menu = CollapsableBox.CollapsibleBox("Year")
@@ -86,7 +88,14 @@ class VisualisationWindow(QWidget):
         self.leftPanelLayout.addWidget(filterButton)
 
         self.map_panel = QtWebEngineWidgets.QWebEngineView()
+        self.leftScroll = QScrollArea()
+        self.leftScroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
+        self.leftScroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.leftScroll.setWidgetResizable(True)
+        self.leftScroll.setWidget(self.leftPanel)
+        self.main_layout.addWidget(self.leftScroll)
         self.main_layout.addWidget(self.map_panel)
+        self.setWindowTitle("QLD Road Crash Map")
         self.updateMap()
 
     def updateYearFilterFactory(self, year):
@@ -125,17 +134,19 @@ class VisualisationWindow(QWidget):
 
         callback = ("function(row) {"
                     "   var markerSize = 3 + row[3]*3;"
-                    "   var markerColour = '#99ff00';"
+                    "   var markerColour = '#00ff00';"
                     "   if (row[2] == 'Fatal') {"
                     "       markerColour = '#ff0000';"
-                    "   } else if (row[2] == 'Hospitalisation') {"
-                    "       markerColour = '#ffe600';"
+                    "   } else if (row[2] == 'Hospitalisation' || row[2] == 'Medical treatment') {"
+                    "       markerColour = '#ff8800';"
+                    "   } else if (row[2] == 'Minor injury') {"
+                    "       markerColour = '#ffea00';"
                     "   }"
                     "   var marker = L.circleMarker(new L.LatLng(row[0], row[1]), "
                     "{radius: markerSize, color: markerColour, fill: true, fillOpacity: 0.8});"
                     "   var popup = L.popup({maxWidth: '300'});"
                     "   var popup_text = $(`<div style='width: 100%; height:100%;'>Latitude: ${row[0]}<br/>"
-                    "Longitude: ${row[1]}<br/>Severity: ${row[2]}</div>`)[0];"
+                    "Longitude: ${row[1]}<br/>Severity: ${row[2]}<br/>Road Condition: ${row[4]}</div>`)[0];"
                     "   popup.setContent(popup_text);"
                     "   marker.bindPopup(popup);"
                     "   return marker;"
@@ -150,7 +161,7 @@ class VisualisationWindow(QWidget):
 
         m = folium.Map(location=[-27.470266, 153.025974], zoom_start=10)
         m.add_child(FastMarkerCluster(filtered_data[['Crash_Latitude', 'Crash_Longitude', 'Crash_Severity',
-                                                     'Count_Casualty_Total']].values.tolist(),
+                                                     'Count_Casualty_Total', 'Crash_Road_Surface_Condition']].values.tolist(),
                                       #popups=popups,
                                       callback=callback,
                                       options={
