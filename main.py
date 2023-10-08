@@ -6,7 +6,7 @@ import os
 import pandas as pd
 from PyQt5.QtCore import QUrl
 from PyQt5.QtWidgets import QApplication, QWidget, QHBoxLayout, QVBoxLayout, QPushButton, QLabel, QProgressBar, QCheckBox
-from PyQt5 import QtWebEngineWidgets, QtWebEngineCore
+from PyQt5 import QtWebEngineWidgets
 from math import floor
 from folium.plugins import FastMarkerCluster
 from CollapsibleBox import CollapsableBox
@@ -22,8 +22,12 @@ class VisualisationWindow(QWidget):
 
         self.years = self.data['Crash_Year'].unique()
         self.selectedYears = self.years.tolist()
+        self.months = self.data['Crash_Month'].unique()
+        self.selectedMonths = self.months.tolist()
         self.severity = self.data['Crash_Severity'].unique()
-        self.selectedSeverity = self.severity
+        self.selectedSeverity = self.severity.tolist()
+        self.roadConditions = self.data['Crash_Road_Surface_Condition'].unique()
+        self.selectedRoadConditions = self.roadConditions.tolist()
 
         self.main_layout = QHBoxLayout()
         self.setLayout(self.main_layout)
@@ -32,6 +36,7 @@ class VisualisationWindow(QWidget):
         self.leftPanel.setLayout(self.leftPanelLayout)
         self.main_layout.addWidget(self.leftPanel)
 
+        # Year Filter Menu
         year_filter_menu = CollapsableBox.CollapsibleBox("Year")
         year_filter_menu_layout = QVBoxLayout()
         for year in self.years:
@@ -42,9 +47,38 @@ class VisualisationWindow(QWidget):
         year_filter_menu.setContentLayout(year_filter_menu_layout)
         self.leftPanelLayout.addWidget(year_filter_menu)
 
-        self.leftPanelLayout.addWidget(QLabel("Month"))
-        self.leftPanelLayout.addWidget(QLabel("Severity"))
-        self.leftPanelLayout.addWidget(QLabel("Road Conditions"))
+        # Month Filter Menu
+        month_filter_menu = CollapsableBox.CollapsibleBox("Month")
+        month_filter_menu_layout = QVBoxLayout()
+        for month in self.months:
+            month_filter_checkbox = QCheckBox(month)
+            month_filter_checkbox.toggle()
+            month_filter_checkbox.stateChanged.connect(self.updateMonthFilterFactory(month))
+            month_filter_menu_layout.addWidget(month_filter_checkbox)
+        month_filter_menu.setContentLayout(month_filter_menu_layout)
+        self.leftPanelLayout.addWidget(month_filter_menu)
+
+        # Severity Filter Menu
+        severity_filter_menu = CollapsableBox.CollapsibleBox("Severity")
+        severity_filter_menu_layout = QVBoxLayout()
+        for severity in self.severity:
+            severity_filter_checkbox = QCheckBox(severity)
+            severity_filter_checkbox.toggle()
+            severity_filter_checkbox.stateChanged.connect(self.updateSeverityFilterFactory(severity))
+            severity_filter_menu_layout.addWidget(severity_filter_checkbox)
+        severity_filter_menu.setContentLayout(severity_filter_menu_layout)
+        self.leftPanelLayout.addWidget(severity_filter_menu)
+
+        # Road Conditions Menu
+        road_conditions_menu = CollapsableBox.CollapsibleBox("Road Conditions")
+        road_conditions_menu_layout = QVBoxLayout()
+        for condition in self.roadConditions:
+            condition_filter_checkbox = QCheckBox(condition)
+            condition_filter_checkbox.toggle()
+            condition_filter_checkbox.stateChanged.connect(self.updateRoadConditionFilterFactory(condition))
+            road_conditions_menu_layout.addWidget(condition_filter_checkbox)
+        road_conditions_menu.setContentLayout(road_conditions_menu_layout)
+        self.leftPanelLayout.addWidget(road_conditions_menu)
 
         filterButton = QPushButton("Filter")
         filterButton.clicked.connect(self.updateMap)
@@ -63,6 +97,30 @@ class VisualisationWindow(QWidget):
                 self.selectedYears.append(year)
         return updateYearFilter
 
+    def updateMonthFilterFactory(self, month):
+        def updateMonthFilter():
+            if month in self.selectedMonths:
+                self.selectedMonths.remove(month)
+            else:
+                self.selectedMonths.append(month)
+        return updateMonthFilter
+
+    def updateSeverityFilterFactory(self, severity):
+        def updateSeverityFilter():
+            if severity in self.selectedSeverity:
+                self.selectedSeverity.remove(severity)
+            else:
+                self.selectedSeverity.append(severity)
+        return updateSeverityFilter
+
+    def updateRoadConditionFilterFactory(self, condition):
+        def updateRoadConditionFilter():
+            if condition in self.selectedRoadConditions:
+                self.selectedRoadConditions.remove(condition)
+            else:
+                self.selectedRoadConditions.append(condition)
+        return updateRoadConditionFilter
+
     def updateMap(self):
 
         callback = ("function(row) {"
@@ -80,10 +138,15 @@ class VisualisationWindow(QWidget):
         filtered_data = self.data[self.data['Crash_Year'].isin(self.selectedYears)]
         filtered_data = filtered_data[filtered_data['Crash_Severity'].isin(self.selectedSeverity)]
 
-        m = folium.Map(location=[-27.470266, 153.025974], zoom_start=9)
+        m = folium.Map(location=[-27.470266, 153.025974], zoom_start=10)
         m.add_child(FastMarkerCluster(filtered_data[['Crash_Latitude', 'Crash_Longitude', 'Crash_Severity']].values.tolist(),
                                       popups=popups,
-                                      callback=callback))
+                                      callback=callback,
+                                      options={
+                                          'disableClusteringAtZoom': 17,
+                                          'maxClusterRadius': 40
+                                      })
+                    )
         m.save("map.html")
         map_url = QUrl.fromLocalFile("/map.html")
         self.map_panel.load(map_url)
