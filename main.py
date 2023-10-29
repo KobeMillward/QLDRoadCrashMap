@@ -1,20 +1,18 @@
-import urllib.request
-import folium
-import io
 import sys
-import os
+import folium
 import pandas as pd
 from PyQt5.QtCore import QUrl, Qt
-from PyQt5.QtWidgets import QApplication, QWidget, QHBoxLayout, QVBoxLayout, QPushButton, QLabel, QProgressBar, \
+from PyQt5.QtWidgets import QApplication, QWidget, QHBoxLayout, QVBoxLayout, QPushButton, \
     QCheckBox, QScrollArea
 from PyQt5 import QtWebEngineWidgets
-from math import floor
 from folium.plugins import FastMarkerCluster
 from CollapsibleBox import CollapsableBox
 
 
 class VisualisationWindow(QWidget):
-
+    """
+    Main window for the visualisation
+    """
     def __init__(self):
         super().__init__()
 
@@ -23,6 +21,7 @@ class VisualisationWindow(QWidget):
         # Clean data
         self.data.drop(self.data[self.data['Crash_Latitude'] == -0.0000095141966955].index, inplace=True)
 
+        # Set up filters
         self.years = self.data['Crash_Year'].unique()
         self.selectedYears = self.years.tolist()
         self.months = self.data['Crash_Month'].unique()
@@ -31,56 +30,22 @@ class VisualisationWindow(QWidget):
         self.selectedSeverity = self.severity.tolist()
         self.roadConditions = self.data['Crash_Road_Surface_Condition'].unique()
         self.selectedRoadConditions = self.roadConditions.tolist()
+        self.lightingConditions = self.data['Crash_Lighting_Condition'].unique()
+        self.selectedLightingConditions = self.lightingConditions.tolist()
 
+        # Set up layout
         self.main_layout = QHBoxLayout()
         self.setLayout(self.main_layout)
         self.leftPanel = QWidget()
         self.leftPanelLayout = QVBoxLayout()
         self.leftPanel.setLayout(self.leftPanelLayout)
 
-        # Year Filter Menu
-        year_filter_menu = CollapsableBox.CollapsibleBox("Year")
-        year_filter_menu_layout = QVBoxLayout()
-        for year in self.years:
-            year_filter_checkbox = QCheckBox(str(year))
-            year_filter_checkbox.toggle()
-            year_filter_checkbox.stateChanged.connect(self.updateYearFilterFactory(year))
-            year_filter_menu_layout.addWidget(year_filter_checkbox)
-        year_filter_menu.setContentLayout(year_filter_menu_layout)
-        self.leftPanelLayout.addWidget(year_filter_menu)
-
-        # Month Filter Menu
-        month_filter_menu = CollapsableBox.CollapsibleBox("Month")
-        month_filter_menu_layout = QVBoxLayout()
-        for month in self.months:
-            month_filter_checkbox = QCheckBox(month)
-            month_filter_checkbox.toggle()
-            month_filter_checkbox.stateChanged.connect(self.updateMonthFilterFactory(month))
-            month_filter_menu_layout.addWidget(month_filter_checkbox)
-        month_filter_menu.setContentLayout(month_filter_menu_layout)
-        self.leftPanelLayout.addWidget(month_filter_menu)
-
-        # Severity Filter Menu
-        severity_filter_menu = CollapsableBox.CollapsibleBox("Severity")
-        severity_filter_menu_layout = QVBoxLayout()
-        for severity in self.severity:
-            severity_filter_checkbox = QCheckBox(severity)
-            severity_filter_checkbox.toggle()
-            severity_filter_checkbox.stateChanged.connect(self.updateSeverityFilterFactory(severity))
-            severity_filter_menu_layout.addWidget(severity_filter_checkbox)
-        severity_filter_menu.setContentLayout(severity_filter_menu_layout)
-        self.leftPanelLayout.addWidget(severity_filter_menu)
-
-        # Road Conditions Menu
-        road_conditions_menu = CollapsableBox.CollapsibleBox("Road Conditions")
-        road_conditions_menu_layout = QVBoxLayout()
-        for condition in self.roadConditions:
-            condition_filter_checkbox = QCheckBox(condition)
-            condition_filter_checkbox.toggle()
-            condition_filter_checkbox.stateChanged.connect(self.updateRoadConditionFilterFactory(condition))
-            road_conditions_menu_layout.addWidget(condition_filter_checkbox)
-        road_conditions_menu.setContentLayout(road_conditions_menu_layout)
-        self.leftPanelLayout.addWidget(road_conditions_menu)
+        # Filter menus
+        self.createFilterMenu("Year", self.years, self.selectedYears)
+        self.createFilterMenu("Month", self.months, self.selectedMonths)
+        self.createFilterMenu("Severity", self.severity, self.selectedSeverity)
+        self.createFilterMenu("Road Conditions", self.roadConditions, self.selectedRoadConditions)
+        self.createFilterMenu("Lighting Conditions", self.lightingConditions, self.selectedLightingConditions)
 
         filterButton = QPushButton("Filter")
         filterButton.clicked.connect(self.updateMap)
@@ -98,40 +63,39 @@ class VisualisationWindow(QWidget):
         self.setWindowTitle("QLD Road Crash Map")
         self.updateMap()
 
-    def updateYearFilterFactory(self, year):
-        def updateYearFilter():
-            if year in self.selectedYears:
-                self.selectedYears.remove(year)
-            else:
-                self.selectedYears.append(year)
-        return updateYearFilter
+    def createFilterMenu(self, name, filter_list, selected_list):
+        filter_menu = CollapsableBox.CollapsibleBox(name)
+        filter_menu_layout = QVBoxLayout()
+        for item in filter_list:
+            filter_checkbox = QCheckBox(str(item))
+            filter_checkbox.toggle()
+            filter_checkbox.stateChanged.connect(self.updateFilterFactoryFactory(item, selected_list))
+            filter_menu_layout.addWidget(filter_checkbox)
+        filter_menu.setContentLayout(filter_menu_layout)
+        self.leftPanelLayout.addWidget(filter_menu)
 
-    def updateMonthFilterFactory(self, month):
-        def updateMonthFilter():
-            if month in self.selectedMonths:
-                self.selectedMonths.remove(month)
-            else:
-                self.selectedMonths.append(month)
-        return updateMonthFilter
-
-    def updateSeverityFilterFactory(self, severity):
-        def updateSeverityFilter():
-            if severity in self.selectedSeverity:
-                self.selectedSeverity.remove(severity)
-            else:
-                self.selectedSeverity.append(severity)
-        return updateSeverityFilter
-
-    def updateRoadConditionFilterFactory(self, condition):
-        def updateRoadConditionFilter():
-            if condition in self.selectedRoadConditions:
-                self.selectedRoadConditions.remove(condition)
-            else:
-                self.selectedRoadConditions.append(condition)
-        return updateRoadConditionFilter
+    def updateFilterFactoryFactory(self, condition, filter):
+        """
+        Creates a filter factory function for each filter
+        :param condition: Specific condition within filter set
+        :param filter: Filter set
+        :return: A filter factory function to create a filter menu
+        """
+        def updateFilterFactory(con, inFilter):
+            def updateFilter():
+                if con in inFilter:
+                    inFilter.remove(con)
+                else:
+                    inFilter.append(con)
+            return updateFilter
+        return updateFilterFactory(condition, filter)
 
     def updateMap(self):
-
+        """
+        Function to update the map called on each filter update.
+        :return: None
+        """
+        # Callback function to create popups and alter marker appearance.
         callback = ("function(row) {"
                     "   var markerSize = 3 + row[3]*3;"
                     "   var markerColour = '#00ff00';"
@@ -146,127 +110,51 @@ class VisualisationWindow(QWidget):
                     "{radius: markerSize, color: markerColour, fill: true, fillOpacity: 0.8});"
                     "   var popup = L.popup({maxWidth: '300'});"
                     "   var popup_text = $(`<div style='width: 100%; height:100%;'>Latitude: ${row[0]}<br/>"
-                    "Longitude: ${row[1]}<br/>Severity: ${row[2]}<br/>Road Condition: ${row[4]}</div>`)[0];"
+                    "Longitude: ${row[1]}<br/>Severity: ${row[2]}<br/>Road Condition: ${row[4]}<br/>"
+                    "Date: ${row[5]} ${row[6]} ${row[7]}<br/>Fatality: ${row[8]}<br/>Hospitalised: ${row[9]}<br/>"
+                    "Medically Treated: ${row[10]}<br/>Minor Injury: ${row[11]}<br/>"
+                    "Lighting Condition: ${row[12]}</div>`)[0];"
                     "   popup.setContent(popup_text);"
                     "   marker.bindPopup(popup);"
                     "   return marker;"
                     "}")
 
-        popups = ["Longitude: {}<br>".format(self.data['Crash_Longitude'])]
-
+        # Filter data set on each filter
         filtered_data = self.data[self.data['Crash_Year'].isin(self.selectedYears)]
         filtered_data = filtered_data[filtered_data['Crash_Month'].isin(self.selectedMonths)]
         filtered_data = filtered_data[filtered_data['Crash_Severity'].isin(self.selectedSeverity)]
         filtered_data = filtered_data[filtered_data['Crash_Road_Surface_Condition'].isin(self.selectedRoadConditions)]
 
+        # Update clustering size based on filtered data size
+        clusteringZoomSize = 17
+        if len(filtered_data.index) < 50000:
+            clusteringZoomSize = 15
+        if len(filtered_data.index) < 1000:
+            clusteringZoomSize = 8
+
+        # Create map and add markers
         m = folium.Map(location=[-27.470266, 153.025974], zoom_start=10)
         m.add_child(FastMarkerCluster(filtered_data[['Crash_Latitude', 'Crash_Longitude', 'Crash_Severity',
-                                                     'Count_Casualty_Total', 'Crash_Road_Surface_Condition']].values.tolist(),
-                                      #popups=popups,
+                                                     'Count_Casualty_Total', 'Crash_Road_Surface_Condition', 'Crash_Day_Of_Week',
+                                                     'Crash_Month', 'Crash_Year', 'Count_Casualty_Fatality',
+                                                     'Count_Casualty_Hospitalised', 'Count_Casualty_MedicallyTreated',
+                                                     'Count_Casualty_MinorInjury', 'Crash_Lighting_Condition']].values.tolist(),
                                       callback=callback,
                                       options={
-                                          'disableClusteringAtZoom': 17,
+                                          'disableClusteringAtZoom': clusteringZoomSize,
+                                          'spiderfyOnMaxZoom': 'disabled',
                                           'maxClusterRadius': 40
                                       })
                     )
+
+        # Save and display map
         m.save("map.html")
         map_url = QUrl.fromLocalFile("/map.html")
         self.map_panel.load(map_url)
 
-class DataRequestWindow(QWidget):
-
-    def __init__(self):
-        super().__init__()
-        layout = QVBoxLayout()
-        self.setLayout(layout)
-        layout.addWidget(QLabel("Data must be downloaded (~179 MB)"))
-        buttonOptionsFrame = QWidget()
-        buttonOptionsFrame.setLayout(QHBoxLayout())
-        cancel_button = QPushButton("Cancel")
-        cancel_button.clicked.connect(self.cancel)
-        download_button = QPushButton("Download")
-        download_button.clicked.connect(self.download)
-        buttonOptionsFrame.layout().addWidget(cancel_button)
-        buttonOptionsFrame.layout().addWidget(download_button)
-        layout.addWidget(buttonOptionsFrame)
-        self.progress_bar = QProgressBar()
-        layout.addWidget(self.progress_bar)
-
-    def cancel(self):
-        exit(0)
-
-    def handleProgress(self, blocknum, blocksize, totalsize):
-        read_data = blocknum * blocksize
-
-        if totalsize > 0:
-            download_percentage = floor(read_data * 100 / totalsize)
-            self.progress_bar.setValue(download_percentage)
-            QApplication.processEvents()
-
-    def download(self):
-        URL = "https://www.data.qld.gov.au/dataset/f3e0ca94-2d7b-44ee-abef-d6b06e9b0729/resource/e88943c0-5968-4972-a" \
-              "15f-38e120d72ec0/download/crash_data_queensland_1_crash_locations.csv"
-        filename = "./crash_data.csv"
-        try:
-            urllib.request.urlretrieve(URL, filename, self.handleProgress)
-        except:
-            # Delete file safely
-            if os.path.isfile("./crash_data.csv"):
-                os.remove("./crash_data.csv")
-            exit(-1)
-
-def create_gui():
-    m = folium.Map(location=[-27.470457, 153.025974])
-
-    data_b = io.BytesIO()
-    m.save(data_b, close_file=False)
-
-    # Create GUI
-    app = QApplication([])
-    window = QWidget()
-    # Right Frame (Map)
-    right_frame = QWidget()
-    right_frame_layout = QVBoxLayout()
-    map_view = QtWebEngineWidgets.QWebEngineView()
-    map_view.setHtml(data_b.getvalue().decode())
-    right_frame_layout.addWidget(map_view)
-    right_frame.setLayout(right_frame_layout)
-
-    # Left Frame (Options)
-    left_frame = QWidget()
-    left_frame_layout = QVBoxLayout()
-    left_frame_layout.addWidget(QPushButton("Left 1"))
-    update_button = QPushButton("Update")
-
-    def update_map():
-        data_bytes = io.BytesIO()
-        new_map = folium.Map(location=[-25.290053, 152.864781])
-        new_map.save(data_bytes, close_file=False)
-        map_view.setHtml(data_bytes.getvalue().decode())
-
-    update_button.clicked.connect(update_map)
-    left_frame_layout.addWidget(update_button)
-    left_frame.setLayout(left_frame_layout)
-
-    # Window Layout
-    window_layout = QHBoxLayout()
-    window_layout.addWidget(left_frame)
-    window_layout.addWidget(right_frame)
-    window.setLayout(window_layout)
-
-    # Run App
-    window.show()
-    sys.exit(app.exec_())
-
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    if not os.path.isfile("./crash_data.csv"):
-        # Create data download request gui
-        w = DataRequestWindow()
-        w.show()
-        app.exec_()
-    else:
-        w = VisualisationWindow()
-        w.show()
-        app.exec_()
+    w = VisualisationWindow()
+    w.show()
+    app.exec_()
